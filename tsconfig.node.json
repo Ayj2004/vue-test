@@ -7,7 +7,7 @@
     "module": "NodeNext", // 对齐主配置的 module（主配置是 NodeNext）
     "moduleResolution": "NodeNext", // 对齐主配置的 moduleResolution（主配置是 NodeNext）
     "skipLibCheck": true,
-    "allowImportingTsExtensions": true,
+    "allowImportingTsExtensions": false,
     "verbatimModuleSyntax": true,
     "moduleDetection": "force",
     "noEmit": false, // 必须关闭：复合项目中被引用的配置不能开启 noEmit（否则报 TS6310）
