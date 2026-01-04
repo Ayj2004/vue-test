@@ -1,18 +1,16 @@
 {
   "compilerOptions": {
+    "composite": true, // 必须开启：解决 "Referenced project must have composite: true" 报错
     "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.node.tsbuildinfo",
     "target": "ES2023",
     "lib": ["ES2023"],
-    "module": "ESNext",
+    "module": "NodeNext", // 对齐主配置的 module（主配置是 NodeNext）
+    "moduleResolution": "NodeNext", // 对齐主配置的 moduleResolution（主配置是 NodeNext）
     "skipLibCheck": true,
-
-    /* Bundler mode */
-    "moduleResolution": "bundler",
     "allowImportingTsExtensions": true,
     "verbatimModuleSyntax": true,
     "moduleDetection": "force",
-    "noEmit": true,
-
+    "noEmit": false, // 必须关闭：复合项目中被引用的配置不能开启 noEmit（否则报 TS6310）
     /* Linting */
     "strict": true,
     "noUnusedLocals": true,

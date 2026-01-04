@@ -2,8 +2,8 @@
   "compilerOptions": {
     "target": "ES2020",
     "useDefineForClassFields": true,
-    "module": "ESNext",
-    "moduleResolution": "NodeNext", // 或 Node（根据项目适配）
+    "module": "NodeNext", // 关键：改为 NodeNext，与 moduleResolution 一致
+    "moduleResolution": "NodeNext",
     "strict": true,
     "jsx": "preserve",
     "sourceMap": true,
@@ -12,14 +12,9 @@
     "esModuleInterop": true,
     "lib": ["ES2020", "DOM", "DOM.Iterable"],
     "skipLibCheck": true,
-    "verbatimModuleSyntax": true, // 启用该配置的前提下
-    "types": ["vite/client"] // 识别 Vite 环境类型
+    "verbatimModuleSyntax": true,
+    "types": ["vite/client"]
   },
-  "include": [
-    "src/**/*.ts",
-    "src/**/*.d.ts", // 包含类型声明文件
-    "src/**/*.tsx",
-    "src/**/*.vue" // 包含所有 .vue 文件
-  ],
+  "include": ["src/**/*.ts", "src/**/*.d.ts", "src/**/*.tsx", "src/**/*.vue"],
   "references": [{ "path": "./tsconfig.node.json" }]
 }
