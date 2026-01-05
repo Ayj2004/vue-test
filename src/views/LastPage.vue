@@ -18,6 +18,7 @@
           class="comment-input"
           maxlength="200"
           @keydown.enter="handleCommentSubmit"
+          @keydown.enter.exact.prevent
         ></textarea>
         <button
           class="btn submit-comment-btn"
@@ -29,12 +30,16 @@
       </div>
 
       <!-- 评论列表 -->
-      <div class="comment-list" v-if="commentList.length">
+      <div class="comment-list" v-if="!isLoading">
         <div
           class="comment-item"
           v-for="(item, index) in commentList"
-          :key="index"
+          :key="item.time"
+          <!--
+          改用唯一时间戳作为key，避免index导致的渲染问题
+          --
         >
+          >
           <div class="comment-content">{{ item.content }}</div>
           <div class="comment-time">{{ formatTime(item.time) }}</div>
           <!-- 新增删除按钮 -->
@@ -46,10 +51,11 @@
             {{ isDeleting ? "删除中..." : "删除" }}
           </button>
         </div>
+        <div class="empty-tip" v-if="commentList.length === 0">
+          暂无留言，快来留下第一个祝福吧～
+        </div>
       </div>
-      <div class="empty-tip" v-else>
-        {{ isLoading ? "加载留言中..." : "暂无留言，快来留下第一个祝福吧～" }}
-      </div>
+      <div class="empty-tip" v-if="isLoading">加载留言中...</div>
     </div>
 
     <!-- 按钮组 -->
@@ -94,11 +100,9 @@ const formatTime = (timestamp: number): string => {
     .padStart(2, "0")}:${date.getMinutes().toString().padStart(2, "0")}`;
 };
 
-// 获取评论列表（严格对齐EdgeKV get API规范）
-const fetchComments = async () => {
+// 优化：通用的KV读取方法
+const getKVData = async (): Promise<CommentItem[]> => {
   try {
-    isLoading.value = true;
-    // 构造请求参数：action=get + testKey=评论存储Key
     const requestUrl = new URL(EDGE_FUNCTION_URL);
     requestUrl.searchParams.set("action", "get");
     requestUrl.searchParams.set("testKey", COMMENT_KV_KEY);
@@ -111,41 +115,41 @@ const fetchComments = async () => {
     });
 
     if (!response.ok) {
-      const errText = await response.text();
-      throw new Error(`HTTP错误：${response.status} - ${errText}`);
+      throw new Error(`请求失败：${response.status}`);
     }
 
     const resText = await response.text();
-    // 解析边缘函数返回的文本信息
-    if (resText.includes("✅ KV读取成功")) {
-      // 提取Value中的JSON数据
-      const valueMatch = resText.match(/Value: (.+)$/);
-      if (valueMatch && valueMatch[1]) {
-        try {
-          const commentData = JSON.parse(valueMatch[1]);
-          commentList.value = Array.isArray(commentData)
-            ? commentData.sort(
-                (a: CommentItem, b: CommentItem) => b.time - a.time
-              )
-            : [];
-        } catch (e) {
-          throw new Error("评论数据格式解析失败");
-        }
-      }
-    } else if (resText.includes("⚠️ KV读取为空")) {
-      commentList.value = [];
-    } else {
-      throw new Error(resText);
+    // 优化解析逻辑：先找JSON格式的内容
+    const jsonMatch = resText.match(/Value: (\[.*\])$/);
+    if (jsonMatch && jsonMatch[1]) {
+      const parsedData = JSON.parse(jsonMatch[1]);
+      return Array.isArray(parsedData) ? parsedData : [];
     }
+    // 如果没有匹配到，返回空数组
+    return [];
+  } catch (error) {
+    console.error("读取KV数据失败:", error);
+    return [];
+  }
+};
+
+// 获取评论列表（优化版）
+const fetchComments = async () => {
+  try {
+    isLoading.value = true;
+    const comments = await getKVData();
+    // 按时间倒序排序
+    commentList.value = comments.sort((a, b) => b.time - a.time);
   } catch (error: any) {
     console.error("获取留言异常:", error.message);
     alert(`加载留言失败：${error.message}，请稍后再试～`);
+    commentList.value = []; // 确保解析失败时列表为空
   } finally {
     isLoading.value = false;
   }
 };
 
-// 提交评论（严格对齐EdgeKV put API规范）
+// 提交评论（优化版）
 const handleCommentSubmit = async () => {
   const content = commentContent.value.trim();
   if (!content) return;
@@ -159,28 +163,16 @@ const handleCommentSubmit = async () => {
     };
 
     // 2. 先读取现有评论列表
-    let currentComments: CommentItem[] = [];
-    const getUrl = new URL(EDGE_FUNCTION_URL);
-    getUrl.searchParams.set("action", "get");
-    getUrl.searchParams.set("testKey", COMMENT_KV_KEY);
-    const getResponse = await fetch(getUrl.toString());
-    if (getResponse.ok) {
-      const getText = await getResponse.text();
-      const valueMatch = getText.match(/Value: (.+)$/);
-      if (valueMatch && valueMatch[1]) {
-        currentComments = JSON.parse(valueMatch[1]);
-      }
-    }
+    const currentComments = await getKVData();
 
     // 3. 追加新评论并限制数量（最多100条）
-    currentComments = Array.isArray(currentComments) ? currentComments : [];
-    currentComments.push(newComment);
-    if (currentComments.length > 100) {
-      currentComments.shift(); // 删除最早的评论
+    const newComments = [...currentComments, newComment];
+    if (newComments.length > 100) {
+      newComments.shift(); // 删除最早的评论
     }
-    const commentStr = JSON.stringify(currentComments);
+    const commentStr = JSON.stringify(newComments);
 
-    // 4. 调用边缘函数写入KV（按官方put规范，valueType=string）
+    // 4. 调用边缘函数写入KV
     const setUrl = new URL(EDGE_FUNCTION_URL);
     setUrl.searchParams.set("action", "set");
     setUrl.searchParams.set("testKey", COMMENT_KV_KEY);
@@ -215,7 +207,7 @@ const handleCommentSubmit = async () => {
   }
 };
 
-// 删除评论（严格对齐EdgeKV delete API规范）
+// 删除评论（优化版）
 const handleDeleteComment = async (index: number) => {
   if (!confirm("确定要删除这条留言吗？")) return;
   const targetComment = commentList.value[index];
@@ -224,49 +216,28 @@ const handleDeleteComment = async (index: number) => {
   try {
     isDeleting.value = true;
     // 1. 读取现有评论列表
-    let currentComments: CommentItem[] = [];
-    const getUrl = new URL(EDGE_FUNCTION_URL);
-    getUrl.searchParams.set("action", "get");
-    getUrl.searchParams.set("testKey", COMMENT_KV_KEY);
-    const getResponse = await fetch(getUrl.toString());
-    if (getResponse.ok) {
-      const getText = await getResponse.text();
-      const valueMatch = getText.match(/Value: (.+)$/);
-      if (valueMatch && valueMatch[1]) {
-        currentComments = JSON.parse(valueMatch[1]);
-      }
-    }
+    const currentComments = await getKVData();
 
     // 2. 过滤掉要删除的评论（按时间戳唯一标识）
-    currentComments = Array.isArray(currentComments) ? currentComments : [];
     const newComments = currentComments.filter(
       (item) => item.time !== targetComment.time
     );
     const commentStr = JSON.stringify(newComments);
 
-    // 3. 先删除原有KV数据（按官方delete规范）
-    const deleteUrl = new URL(EDGE_FUNCTION_URL);
-    deleteUrl.searchParams.set("action", "delete");
-    deleteUrl.searchParams.set("testKey", COMMENT_KV_KEY);
-    const deleteResponse = await fetch(deleteUrl.toString());
-    if (!deleteResponse.ok) {
-      const errText = await deleteResponse.text();
-      throw new Error(`删除原有数据失败：${errText}`);
-    }
-
-    // 4. 写入过滤后的新评论列表
+    // 3. 写入过滤后的新评论列表（无需先删除，直接覆盖更高效）
     const setUrl = new URL(EDGE_FUNCTION_URL);
     setUrl.searchParams.set("action", "set");
     setUrl.searchParams.set("testKey", COMMENT_KV_KEY);
     setUrl.searchParams.set("testValue", commentStr);
     setUrl.searchParams.set("valueType", "string");
+
     const setResponse = await fetch(setUrl.toString());
     if (!setResponse.ok) {
       const errText = await setResponse.text();
       throw new Error(`更新评论列表失败：${errText}`);
     }
 
-    // 5. 重新加载评论列表
+    // 4. 重新加载评论列表
     await fetchComments();
     alert("留言删除成功～");
   } catch (error: any) {
