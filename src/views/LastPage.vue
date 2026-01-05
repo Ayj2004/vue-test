@@ -37,6 +37,14 @@
         >
           <div class="comment-content">{{ item.content }}</div>
           <div class="comment-time">{{ formatTime(item.time) }}</div>
+          <!-- 新增删除按钮 -->
+          <button
+            class="delete-comment-btn"
+            @click="handleDeleteComment(index)"
+            :disabled="isDeleting"
+          >
+            {{ isDeleting ? "删除中..." : "删除" }}
+          </button>
         </div>
       </div>
       <div class="empty-tip" v-else>
@@ -68,9 +76,12 @@ const commentContent: Ref<string> = ref(""); // 输入的评论内容
 const commentList: Ref<CommentItem[]> = ref([]); // 评论列表
 const isLoading: Ref<boolean> = ref(false); // 加载状态
 const isSubmitting: Ref<boolean> = ref(false); // 提交状态
+const isDeleting: Ref<boolean> = ref(false); // 删除状态
 
-// 边缘函数代理地址（根据实际部署的边缘函数地址调整）
-const EDGE_FUNCTION_URL = "/edge-functions/comment-proxy.js";
+// 边缘函数地址（替换为实际部署的边缘函数域名）
+const EDGE_FUNCTION_URL = "https://vue-test.4fa2a2a9.er.aliyun-esa.net";
+// KV存储的Key（与边缘函数保持一致）
+const COMMENT_KV_KEY = "page_comments";
 
 // 格式化时间
 const formatTime = (timestamp: number): string => {
@@ -83,65 +94,186 @@ const formatTime = (timestamp: number): string => {
     .padStart(2, "0")}:${date.getMinutes().toString().padStart(2, "0")}`;
 };
 
-// 获取评论列表
+// 获取评论列表（严格对齐EdgeKV get API规范）
 const fetchComments = async () => {
   try {
     isLoading.value = true;
-    const response = await fetch(`${EDGE_FUNCTION_URL}?action=get`);
-    if (!response.ok) throw new Error("获取留言失败");
+    // 构造请求参数：action=get + testKey=评论存储Key
+    const requestUrl = new URL(EDGE_FUNCTION_URL);
+    requestUrl.searchParams.set("action", "get");
+    requestUrl.searchParams.set("testKey", COMMENT_KV_KEY);
 
-    const res = await response.json();
-    if (res.code === 200) {
-      // 按时间倒序排列
-      commentList.value = (res.data || []).sort(
-        (a: CommentItem, b: CommentItem) => b.time - a.time
-      );
-    } else {
-      console.error("获取留言失败:", res.msg);
+    const response = await fetch(requestUrl.toString(), {
+      method: "GET",
+      headers: {
+        "Content-Type": "text/plain; charset=utf-8",
+      },
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      throw new Error(`HTTP错误：${response.status} - ${errText}`);
     }
-  } catch (error) {
-    console.error("获取留言异常:", error);
-    alert("加载留言失败，请稍后再试～");
+
+    const resText = await response.text();
+    // 解析边缘函数返回的文本信息
+    if (resText.includes("✅ KV读取成功")) {
+      // 提取Value中的JSON数据
+      const valueMatch = resText.match(/Value: (.+)$/);
+      if (valueMatch && valueMatch[1]) {
+        try {
+          const commentData = JSON.parse(valueMatch[1]);
+          commentList.value = Array.isArray(commentData)
+            ? commentData.sort(
+                (a: CommentItem, b: CommentItem) => b.time - a.time
+              )
+            : [];
+        } catch (e) {
+          throw new Error("评论数据格式解析失败");
+        }
+      }
+    } else if (resText.includes("⚠️ KV读取为空")) {
+      commentList.value = [];
+    } else {
+      throw new Error(resText);
+    }
+  } catch (error: any) {
+    console.error("获取留言异常:", error.message);
+    alert(`加载留言失败：${error.message}，请稍后再试～`);
   } finally {
     isLoading.value = false;
   }
 };
 
-// 提交评论
+// 提交评论（严格对齐EdgeKV put API规范）
 const handleCommentSubmit = async () => {
   const content = commentContent.value.trim();
   if (!content) return;
 
   try {
     isSubmitting.value = true;
-    const commentData: CommentItem = {
+    // 1. 构造新评论数据
+    const newComment: CommentItem = {
       content,
       time: Date.now(),
     };
 
-    // 调用边缘函数提交评论
-    const response = await fetch(`${EDGE_FUNCTION_URL}?action=set`, {
-      method: "POST",
+    // 2. 先读取现有评论列表
+    let currentComments: CommentItem[] = [];
+    const getUrl = new URL(EDGE_FUNCTION_URL);
+    getUrl.searchParams.set("action", "get");
+    getUrl.searchParams.set("testKey", COMMENT_KV_KEY);
+    const getResponse = await fetch(getUrl.toString());
+    if (getResponse.ok) {
+      const getText = await getResponse.text();
+      const valueMatch = getText.match(/Value: (.+)$/);
+      if (valueMatch && valueMatch[1]) {
+        currentComments = JSON.parse(valueMatch[1]);
+      }
+    }
+
+    // 3. 追加新评论并限制数量（最多100条）
+    currentComments = Array.isArray(currentComments) ? currentComments : [];
+    currentComments.push(newComment);
+    if (currentComments.length > 100) {
+      currentComments.shift(); // 删除最早的评论
+    }
+    const commentStr = JSON.stringify(currentComments);
+
+    // 4. 调用边缘函数写入KV（按官方put规范，valueType=string）
+    const setUrl = new URL(EDGE_FUNCTION_URL);
+    setUrl.searchParams.set("action", "set");
+    setUrl.searchParams.set("testKey", COMMENT_KV_KEY);
+    setUrl.searchParams.set("testValue", commentStr);
+    setUrl.searchParams.set("valueType", "string");
+
+    const response = await fetch(setUrl.toString(), {
+      method: "GET",
       headers: {
-        "Content-Type": "application/json",
+        "Content-Type": "text/plain; charset=utf-8",
       },
-      body: JSON.stringify(commentData),
     });
 
-    const res = await response.json();
-    if (res.code === 200) {
-      // 提交成功后清空输入框并重新获取列表
-      commentContent.value = "";
-      await fetchComments();
+    if (!response.ok) {
+      const errText = await response.text();
+      throw new Error(errText);
+    }
+
+    const resText = await response.text();
+    if (resText.includes("✅ KV写入成功")) {
+      commentContent.value = ""; // 清空输入框
+      await fetchComments(); // 重新加载评论列表
       alert("祝福发送成功～");
     } else {
-      throw new Error(res.msg || "发送失败");
+      throw new Error(resText);
     }
-  } catch (error) {
-    console.error("提交评论异常:", error);
-    alert("发送祝福失败，请稍后再试～");
+  } catch (error: any) {
+    console.error("提交评论异常:", error.message);
+    alert(`发送祝福失败：${error.message}，请稍后再试～`);
   } finally {
     isSubmitting.value = false;
+  }
+};
+
+// 删除评论（严格对齐EdgeKV delete API规范）
+const handleDeleteComment = async (index: number) => {
+  if (!confirm("确定要删除这条留言吗？")) return;
+  const targetComment = commentList.value[index];
+  if (!targetComment) return;
+
+  try {
+    isDeleting.value = true;
+    // 1. 读取现有评论列表
+    let currentComments: CommentItem[] = [];
+    const getUrl = new URL(EDGE_FUNCTION_URL);
+    getUrl.searchParams.set("action", "get");
+    getUrl.searchParams.set("testKey", COMMENT_KV_KEY);
+    const getResponse = await fetch(getUrl.toString());
+    if (getResponse.ok) {
+      const getText = await getResponse.text();
+      const valueMatch = getText.match(/Value: (.+)$/);
+      if (valueMatch && valueMatch[1]) {
+        currentComments = JSON.parse(valueMatch[1]);
+      }
+    }
+
+    // 2. 过滤掉要删除的评论（按时间戳唯一标识）
+    currentComments = Array.isArray(currentComments) ? currentComments : [];
+    const newComments = currentComments.filter(
+      (item) => item.time !== targetComment.time
+    );
+    const commentStr = JSON.stringify(newComments);
+
+    // 3. 先删除原有KV数据（按官方delete规范）
+    const deleteUrl = new URL(EDGE_FUNCTION_URL);
+    deleteUrl.searchParams.set("action", "delete");
+    deleteUrl.searchParams.set("testKey", COMMENT_KV_KEY);
+    const deleteResponse = await fetch(deleteUrl.toString());
+    if (!deleteResponse.ok) {
+      const errText = await deleteResponse.text();
+      throw new Error(`删除原有数据失败：${errText}`);
+    }
+
+    // 4. 写入过滤后的新评论列表
+    const setUrl = new URL(EDGE_FUNCTION_URL);
+    setUrl.searchParams.set("action", "set");
+    setUrl.searchParams.set("testKey", COMMENT_KV_KEY);
+    setUrl.searchParams.set("testValue", commentStr);
+    setUrl.searchParams.set("valueType", "string");
+    const setResponse = await fetch(setUrl.toString());
+    if (!setResponse.ok) {
+      const errText = await setResponse.text();
+      throw new Error(`更新评论列表失败：${errText}`);
+    }
+
+    // 5. 重新加载评论列表
+    await fetchComments();
+    alert("留言删除成功～");
+  } catch (error: any) {
+    console.error("删除评论异常:", error.message);
+    alert(`删除留言失败：${error.message}，请稍后再试～`);
+  } finally {
+    isDeleting.value = false;
   }
 };
 
@@ -225,6 +357,7 @@ onMounted(() => {
   background: white;
   border-radius: 4px;
   border-left: 3px solid #42b983;
+  position: relative;
 }
 
 .comment-content {
@@ -237,6 +370,25 @@ onMounted(() => {
   font-size: 12px;
   color: #999;
   text-align: right;
+  margin-bottom: 8px;
+}
+
+.delete-comment-btn {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  padding: 4px 8px;
+  font-size: 12px;
+  background: #ff4444;
+  color: white;
+  border: none;
+  border-radius: 2px;
+  cursor: pointer;
+}
+
+.delete-comment-btn:disabled {
+  background: #ccc;
+  cursor: not-allowed;
 }
 
 .empty-tip {
