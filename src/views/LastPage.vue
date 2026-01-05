@@ -6,40 +6,36 @@
       <span>走在雪中，就算迷路，我也愿意</span>
     </div>
 
-    <!-- 评论区 -->
+    <!-- 评论区模块 -->
     <div class="comment-section">
-      <h3>留言评论</h3>
-      <!-- 评论输入 -->
-      <div class="comment-input">
+      <h3 class="comment-title">留言区</h3>
+
+      <!-- 评论输入框 -->
+      <div class="comment-input-wrap">
         <textarea
           v-model="commentContent"
-          placeholder="请输入你的祝福..."
-          maxlength="1800"
-          <!--
-          匹配EdgeKV
-          Value
-          1.8MB限制，文本约1800字符
-          --
-        >
-        ></textarea
-        >
-        <button class="btn submit-btn" @click="submitComment">提交评论</button>
+          placeholder="写下你的祝福吧..."
+          class="comment-input"
+          maxlength="200"
+        ></textarea>
+        <button @click="submitComment" class="submit-btn">提交</button>
       </div>
+
       <!-- 评论列表 -->
       <div class="comment-list">
         <div
-          v-for="comment in commentList"
-          :key="comment.key"
+          v-for="(item, index) in commentList"
+          :key="index"
           class="comment-item"
         >
-          <p class="comment-content">{{ comment.content }}</p>
-          <p class="comment-time">{{ comment.time }}</p>
-          <button class="btn delete-btn" @click="deleteComment(comment.key)">
-            删除
-          </button>
+          <div class="comment-content">{{ item.content }}</div>
+          <div class="comment-time">{{ formatTime(item.time) }}</div>
         </div>
-        <div v-if="commentList.length === 0" class="no-comment">暂无评论~</div>
       </div>
+
+      <!-- 加载/错误提示 -->
+      <div v-if="loading" class="comment-loading">加载中...</div>
+      <div v-if="error" class="comment-error">{{ error }}</div>
     </div>
 
     <div class="btn-group">
@@ -53,224 +49,188 @@
 <script setup lang="ts">
 import { ref, onMounted } from "vue";
 
-// 评论相关响应式数据
-const commentContent = ref("");
-// 严格匹配EdgeKV存储结构，key为唯一标识
-const commentList = ref<
-  Array<{
-    content: string;
-    time: string;
-    key: string;
-  }>
->([]);
-// 替换为你在ESA控制台创建的EdgeKV命名空间
-const NAMESPACE = "birthday-comment-kv";
+// 评论相关状态
+const commentContent = ref(""); // 输入的评论内容
+const commentList = ref<Array<{ content: string; time: number }>>([]); // 评论列表
+const loading = ref(false); // 加载状态
+const error = ref(""); // 错误提示
 
-// 初始化EdgeKV实例（适配ESA平台内置API + 本地调试降级）
-const createEdgeKVInstance = () => {
-  // 生产环境（ESA平台）使用真实EdgeKV
-  if (typeof EdgeKV !== "undefined") {
-    return new EdgeKV({ namespace: NAMESPACE });
-  }
-  // 本地开发环境用localStorage模拟，避免报错
-  else {
-    console.warn("本地环境未检测到EdgeKV，使用localStorage模拟");
-    return {
-      // 模拟get方法（适配type: json参数）
-      get: async (key: string, options?: { type: string }) => {
-        const data = localStorage.getItem(key);
-        if (!data) return undefined;
-        return options?.type === "json" ? JSON.parse(data) : data;
-      },
-      // 模拟put方法
-      put: async (key: string, value: string) => {
-        localStorage.setItem(key, value);
-        return undefined;
-      },
-      // 模拟delete方法
-      delete: async (key: string) => {
-        localStorage.removeItem(key);
-        return true;
-      },
-    };
-  }
+// 格式化时间
+const formatTime = (timestamp: number) => {
+  const date = new Date(timestamp);
+  return `${date.getFullYear()}-${(date.getMonth() + 1)
+    .toString()
+    .padStart(2, "0")}-${date.getDate().toString().padStart(2, "0")} ${date
+    .getHours()
+    .toString()
+    .padStart(2, "0")}:${date.getMinutes().toString().padStart(2, "0")}`;
 };
 
-const edgeKV = createEdgeKVInstance();
-
-// 从EdgeKV加载所有评论
-const fetchComments = async () => {
+// 获取评论列表
+const getComments = async () => {
+  loading.value = true;
+  error.value = "";
   try {
-    // 严格按官方API调用：指定type为json，直接返回对象
-    const commentData = await edgeKV.get("comment_list", { type: "json" });
-    if (commentData) {
-      commentList.value = commentData;
-    }
-  } catch (e) {
-    console.error("加载评论失败：", e);
-    alert("加载评论失败，请稍后重试");
-  }
-};
-
-// 提交评论到EdgeKV
-const submitComment = async () => {
-  const content = commentContent.value.trim();
-  if (!content) {
-    alert("请输入评论内容");
-    return;
-  }
-
-  // 构造评论数据（key唯一，符合EdgeKV的key规则：字母/数字/-/_）
-  const newComment = {
-    content,
-    time: new Date().toLocaleString(),
-    key: `comment_${Date.now()}_${Math.random().toString(36).slice(2)}`,
-  };
-
-  try {
-    const newCommentList = [...commentList.value, newComment];
-    // 按官方API：put接收string类型value（JSON序列化）
-    await edgeKV.put("comment_list", JSON.stringify(newCommentList));
-    // 更新页面列表
-    commentList.value = newCommentList;
-    // 清空输入框
-    commentContent.value = "";
-    alert("评论提交成功");
-  } catch (e) {
-    console.error("提交评论失败：", e);
-    alert("提交评论失败，请稍后重试");
-  }
-};
-
-// 从EdgeKV删除指定评论
-const deleteComment = async (commentKey: string) => {
-  if (!confirm("确定要删除这条评论吗？")) {
-    return;
-  }
-
-  try {
-    // 过滤要删除的评论
-    const newCommentList = commentList.value.filter(
-      (item) => item.key !== commentKey
+    // 调用边缘函数接口获取评论
+    const res = await fetch(
+      "/edge-functions/comment-proxy?action=getComments",
+      {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      }
     );
-    // 更新EdgeKV存储
-    await edgeKV.put("comment_list", JSON.stringify(newCommentList));
-    // 更新页面列表
-    commentList.value = newCommentList;
-    alert("评论删除成功");
-  } catch (e) {
-    console.error("删除评论失败：", e);
-    alert("删除评论失败，请稍后重试");
+    if (!res.ok) throw new Error("获取评论失败");
+    const data = await res.json();
+    commentList.value = data.comments || [];
+  } catch (err) {
+    error.value = (err as Error).message || "获取评论出错";
+    console.error("获取评论失败:", err);
+  } finally {
+    loading.value = false;
+  }
+};
+
+// 提交评论
+const submitComment = async () => {
+  if (!commentContent.value.trim()) {
+    error.value = "请输入评论内容";
+    return;
+  }
+  loading.value = true;
+  error.value = "";
+  try {
+    // 调用边缘函数接口提交评论
+    const res = await fetch(
+      "/edge-functions/comment-proxy?action=submitComment",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          content: commentContent.value.trim(),
+          time: Date.now(),
+        }),
+      }
+    );
+    if (!res.ok) throw new Error("提交评论失败");
+    // 提交成功后清空输入框并重新获取评论列表
+    commentContent.value = "";
+    await getComments();
+  } catch (err) {
+    error.value = (err as Error).message || "提交评论出错";
+    console.error("提交评论失败:", err);
+  } finally {
+    loading.value = false;
   }
 };
 
 // 页面挂载时加载评论
 onMounted(() => {
-  fetchComments();
+  getComments();
 });
 </script>
 
 <style scoped>
 .content-text {
   text-align: center;
-  margin: 20px 0;
+  margin-bottom: 40px;
 }
 .content-text span {
   display: block;
   line-height: 1.8;
-  font-size: 16px;
+  font-size: 18px;
+  color: #333;
 }
 
 /* 评论区样式 */
 .comment-section {
   width: 80%;
-  margin: 30px auto;
-  padding: 20px;
-  border: 1px solid #eee;
-  border-radius: 8px;
+  margin: 0 auto 40px;
+  max-width: 600px;
 }
-
-.comment-input textarea {
-  width: 100%;
-  height: 100px;
+.comment-title {
+  text-align: center;
+  font-size: 20px;
+  margin-bottom: 20px;
+  color: #555;
+}
+.comment-input-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 30px;
+}
+.comment-input {
   padding: 10px;
   border: 1px solid #ddd;
   border-radius: 4px;
-  margin-bottom: 10px;
-  resize: none;
+  min-height: 80px;
+  resize: vertical;
   font-size: 14px;
 }
-
 .submit-btn {
-  background-color: #42b983;
+  align-self: flex-end;
+  padding: 8px 20px;
+  background: #42b983;
   color: white;
   border: none;
-  padding: 8px 16px;
   border-radius: 4px;
   cursor: pointer;
-  font-size: 14px;
 }
 .submit-btn:hover {
-  background-color: #359e6d;
+  background: #359469;
 }
 
 .comment-list {
-  margin-top: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
 }
-
 .comment-item {
-  padding: 10px;
-  border-bottom: 1px solid #eee;
-  margin-bottom: 10px;
+  padding: 15px;
+  background: #f9f9f9;
+  border-radius: 4px;
 }
-
 .comment-content {
-  margin: 0 0 5px 0;
-  font-size: 14px;
+  color: #333;
   line-height: 1.5;
+  margin-bottom: 8px;
 }
-
 .comment-time {
   font-size: 12px;
   color: #999;
-  margin: 0 0 5px 0;
+  text-align: right;
 }
 
-.delete-btn {
-  background-color: #ff4444;
-  color: white;
-  border: none;
-  padding: 4px 8px;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 12px;
-}
-.delete-btn:hover {
-  background-color: #cc0000;
-}
-
-.no-comment {
+.comment-loading,
+.comment-error {
   text-align: center;
-  color: #999;
-  padding: 20px;
-  font-size: 14px;
+  padding: 10px;
+  color: #666;
+}
+.comment-error {
+  color: #e53935;
 }
 
 .btn-group {
   text-align: center;
   margin-top: 20px;
 }
-
-.btn-secondary {
-  background-color: #6c757d;
-  color: white;
+.btn {
+  padding: 10px 25px;
   border: none;
-  padding: 8px 16px;
   border-radius: 4px;
   cursor: pointer;
-  font-size: 14px;
+  font-size: 16px;
+}
+.btn-secondary {
+  background: #999;
+  color: white;
 }
 .btn-secondary:hover {
-  background-color: #5a6268;
+  background: #777;
 }
 </style>
