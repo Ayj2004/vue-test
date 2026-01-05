@@ -1,91 +1,147 @@
+// 评论功能边缘函数代理（基于EdgeKV实现）
 export default {
   async fetch(request) {
     // 全局异常捕获
     try {
-      const url = new URL(request.url);
-      const action = url.searchParams.get("action");
-      const namespace = "birthday-comment-kv"; // 替换为你的KV存储空间名称
-      let edgeKv;
-
-      // 初始化EdgeKV
+      // 1. 解析URL
+      let url;
       try {
-        edgeKv = new EdgeKV({ namespace });
+        url = new URL(request.url);
       } catch (e) {
-        console.error("EdgeKV实例化失败:", e);
+        const errMsg = `URL解析失败：${e.message}`;
+        console.error(errMsg);
         return new Response(
-          JSON.stringify({ code: 500, msg: "存储初始化失败" }),
+          JSON.stringify({
+            code: 400,
+            msg: errMsg,
+          }),
           {
-            status: 500,
-            headers: { "Content-Type": "application/json" },
+            status: 400,
+            headers: {
+              "Content-Type": "application/json; charset=utf-8",
+              "Access-Control-Allow-Origin": "*",
+              "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+              "Access-Control-Allow-Headers": "Content-Type",
+            },
           }
         );
       }
 
-      // 1. 获取评论列表
-      if (action === "getComments") {
+      // 处理OPTIONS预检请求
+      if (request.method === "OPTIONS") {
+        return new Response(null, {
+          status: 204,
+          headers: {
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+            "Access-Control-Allow-Headers": "Content-Type",
+            "Access-Control-Max-Age": "86400",
+          },
+        });
+      }
+
+      // 2. 初始化配置
+      const action = url.searchParams.get("action"); // get/set
+      const namespace = "birthday-comment-kv"; // 替换为你的KV命名空间
+      const commentKey = "page_comments"; // 存储评论的KV Key
+
+      // 3. 初始化EdgeKV
+      let edgeKv;
+      try {
+        edgeKv = new EdgeKV({ namespace });
+      } catch (e) {
+        const errMsg = `EdgeKV实例化失败：${e.message}`;
+        console.error(errMsg);
+        return new Response(
+          JSON.stringify({
+            code: 500,
+            msg: errMsg,
+          }),
+          {
+            status: 500,
+            headers: {
+              "Content-Type": "application/json; charset=utf-8",
+              "Access-Control-Allow-Origin": "*",
+            },
+          }
+        );
+      }
+
+      // 4. 处理获取评论请求（GET）
+      if (action === "get") {
         try {
-          // 从KV中读取评论数据（key固定为comments_list）
-          const commentsStr = await edgeKv.get("comments_list", {
-            type: "text",
-          });
-          const comments = commentsStr ? JSON.parse(commentsStr) : [];
+          // 从KV读取评论列表（JSON字符串解析）
+          const commentStr = await edgeKv.get(commentKey, { type: "text" });
+          const commentList = commentStr ? JSON.parse(commentStr) : [];
+
           return new Response(
             JSON.stringify({
               code: 200,
-              msg: "success",
-              comments,
+              msg: "获取评论成功",
+              data: commentList,
             }),
             {
+              status: 200,
               headers: {
-                "Content-Type": "application/json",
-                "Access-Control-Allow-Origin": "*", // 允许跨域
-                "Access-Control-Allow-Methods": "GET, POST",
-                "Access-Control-Allow-Headers": "Content-Type",
+                "Content-Type": "application/json; charset=utf-8",
+                "Access-Control-Allow-Origin": "*",
               },
             }
           );
         } catch (e) {
-          console.error("获取评论失败:", e);
+          const errMsg = `获取评论失败：${e.message}`;
+          console.error(errMsg);
           return new Response(
-            JSON.stringify({ code: 500, msg: "获取评论失败" }),
+            JSON.stringify({
+              code: 500,
+              msg: errMsg,
+            }),
             {
               status: 500,
-              headers: { "Content-Type": "application/json" },
+              headers: {
+                "Content-Type": "application/json; charset=utf-8",
+                "Access-Control-Allow-Origin": "*",
+              },
             }
           );
         }
       }
 
-      // 2. 提交评论
-      if (action === "submitComment") {
+      // 5. 处理提交评论请求（POST）
+      if (action === "set") {
         try {
-          // 解析请求体
-          const body = await request.json();
-          if (!body.content) {
-            return new Response(
-              JSON.stringify({ code: 400, msg: "评论内容不能为空" }),
-              {
-                status: 400,
-                headers: { "Content-Type": "application/json" },
-              }
-            );
+          // 解析请求体中的评论数据
+          let newComment;
+          try {
+            newComment = await request.json();
+          } catch (e) {
+            throw new Error("评论数据格式错误：请提交JSON格式数据");
           }
 
-          // 读取现有评论
-          const commentsStr = await edgeKv.get("comments_list", {
-            type: "text",
-          });
-          const comments = commentsStr ? JSON.parse(commentsStr) : [];
+          // 校验评论内容
+          if (
+            !newComment.content ||
+            typeof newComment.content !== "string" ||
+            newComment.content.trim() === ""
+          ) {
+            throw new Error("评论内容不能为空");
+          }
+          if (!newComment.time || typeof newComment.time !== "number") {
+            newComment.time = Date.now(); // 补全默认时间戳
+          }
 
-          // 添加新评论（前置插入，最新的在最前面）
-          comments.unshift({
-            content: body.content,
-            time: body.time || Date.now(),
-          });
+          // 读取现有评论列表
+          const commentStr = await edgeKv.get(commentKey, { type: "text" });
+          const commentList = commentStr ? JSON.parse(commentStr) : [];
 
-          // 写入KV（限制评论数量，最多保留100条）
-          const limitComments = comments.slice(0, 100);
-          await edgeKv.put("comments_list", JSON.stringify(limitComments));
+          // 添加新评论（限制最多存储100条，避免数据过大）
+          commentList.push(newComment);
+          if (commentList.length > 100) {
+            commentList.shift(); // 超出100条时删除最早的评论
+          }
+
+          // 将更新后的评论列表写入KV
+          await edgeKv.put(commentKey, JSON.stringify(commentList));
 
           return new Response(
             JSON.stringify({
@@ -93,42 +149,59 @@ export default {
               msg: "评论提交成功",
             }),
             {
+              status: 200,
               headers: {
-                "Content-Type": "application/json",
+                "Content-Type": "application/json; charset=utf-8",
                 "Access-Control-Allow-Origin": "*",
-                "Access-Control-Allow-Methods": "GET, POST",
-                "Access-Control-Allow-Headers": "Content-Type",
               },
             }
           );
         } catch (e) {
-          console.error("提交评论失败:", e);
+          const errMsg = `提交评论失败：${e.message}`;
+          console.error(errMsg);
           return new Response(
-            JSON.stringify({ code: 500, msg: "提交评论失败" }),
+            JSON.stringify({
+              code: 500,
+              msg: errMsg,
+            }),
             {
               status: 500,
-              headers: { "Content-Type": "application/json" },
+              headers: {
+                "Content-Type": "application/json; charset=utf-8",
+                "Access-Control-Allow-Origin": "*",
+              },
             }
           );
         }
       }
 
-      // 3. 未知action
+      // 6. 无效操作处理
       return new Response(
-        JSON.stringify({ code: 400, msg: "无效的操作类型" }),
+        JSON.stringify({
+          code: 400,
+          msg: "无效的操作类型，请指定action=get或action=set",
+        }),
         {
           status: 400,
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json; charset=utf-8",
+            "Access-Control-Allow-Origin": "*",
+          },
         }
       );
     } catch (e) {
-      console.error("全局异常:", e);
+      // 终极兜底异常处理
+      const errMsg = `函数执行全局异常：${e.message}`;
+      console.error(errMsg);
       return new Response(
-        JSON.stringify({ code: 500, msg: "服务器内部错误" }),
+        JSON.stringify({
+          code: 500,
+          msg: errMsg,
+        }),
         {
           status: 500,
           headers: {
-            "Content-Type": "application/json",
+            "Content-Type": "application/json; charset=utf-8",
             "Access-Control-Allow-Origin": "*",
           },
         }
