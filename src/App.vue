@@ -1,16 +1,11 @@
-<!-- src/App.vue -->
 <template>
   <router-view />
 </template>
 
+<script setup lang="ts">
+// 根组件仅承载路由视图
+</script>
+
 <style scoped>
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-}
-body {
-  font-family: "Microsoft YaHei", sans-serif;
-  background-color: #f5f5f5;
-}
+/* 根组件样式 */
 </style>

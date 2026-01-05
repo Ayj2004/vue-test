@@ -1,0 +1,141 @@
+/* 全局重置 */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  font-family: "Microsoft YaHei", "PingFang SC", "Helvetica Neue", sans-serif;
+}
+
+body {
+  background-color: #f8f5f2;
+  color: #333;
+  line-height: 1.6;
+}
+
+/* 容器样式 */
+.page-container {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 40px 20px;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+}
+
+/* 标题通用样式 */
+.page-title {
+  font-size: 2.2rem;
+  color: #d87093;
+  margin-bottom: 20px;
+  text-align: center;
+  font-weight: 600;
+  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+/* 内容文本样式 */
+.content-text {
+  font-size: 1.1rem;
+  color: #555;
+  line-height: 1.8;
+  margin-bottom: 30px;
+  padding: 20px;
+  background-color: #fff;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  white-space: pre-line;
+}
+
+/* 图片样式 */
+.content-img {
+  width: 100%;
+  max-width: 600px;
+  height: auto;
+  border-radius: 12px;
+  margin: 20px 0;
+  box-shadow: 0 6px 15px rgba(0, 0, 0, 0.1);
+  object-fit: cover;
+}
+
+/* 按钮通用样式 */
+.btn {
+  padding: 12px 24px;
+  border: none;
+  border-radius: 8px;
+  font-size: 1rem;
+  cursor: pointer;
+  margin: 0 10px;
+  transition: all 0.3s ease;
+}
+
+.btn-primary {
+  background-color: #d87093;
+  color: #fff;
+}
+
+.btn-primary:hover {
+  background-color: #c75b81;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(216, 112, 147, 0.3);
+}
+
+.btn-secondary {
+  background-color: #f0e6e0;
+  color: #666;
+}
+
+.btn-secondary:hover {
+  background-color: #e6d9d0;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+/* 按钮组 */
+.btn-group {
+  margin-top: 30px;
+  display: flex;
+  gap: 15px;
+}
+
+/* 各页面个性化样式 */
+/* 首页样式 */
+.home-page {
+  background-color: #fef9f7;
+}
+
+.home-title {
+  font-size: 2.5rem;
+  color: #e64c65;
+  margin-bottom: 30px;
+}
+
+/* 22岁总结页样式 */
+.year22-page .content-text {
+  background-color: #f9f0f3;
+  border-left: 5px solid #d87093;
+}
+
+/* 月份页面样式 */
+.month-page .content-text {
+  background-color: #fff8f5;
+}
+
+.month-page .page-title {
+  color: #c86589;
+  font-size: 1.8rem;
+}
+
+/* 最后一页样式 */
+.last-page {
+  background-color: #f5f0f4;
+}
+
+.last-page .content-text {
+  font-size: 1.3rem;
+  color: #776274;
+  font-style: italic;
+  text-align: center;
+  background-color: transparent;
+  box-shadow: none;
+}
