@@ -1,5 +1,5 @@
 <template>
-  <div class="page-container month-page">
+  <div class="page-container month-page month1-page">
     <h2 class="page-title">1月 · 依赖</h2>
     <div class="content-text">
       •
@@ -11,7 +11,7 @@
         返回首页
       </button>
       <button class="btn btn-primary" @click="$router.push('/month2')">
-        下一月
+        2月
       </button>
     </div>
   </div>

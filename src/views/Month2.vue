@@ -1,5 +1,5 @@
 <template>
-  <div class="page-container month-page">
+  <div class="page-container month-page month2-page">
     <h2 class="page-title">2月 · 焦虑</h2>
     <div class="content-text">
       • 2月的主题词是焦虑。 每天找着不是事情的事情
@@ -7,11 +7,14 @@
     </div>
     <img src="/2.jpg" alt="2月回忆" class="content-img" />
     <div class="btn-group">
+      <button class="btn btn-primary" @click="$router.push('/month1')">
+        1月
+      </button>
       <button class="btn btn-secondary" @click="$router.push('/')">
         返回首页
       </button>
       <button class="btn btn-primary" @click="$router.push('/month3')">
-        下一月
+        3月
       </button>
     </div>
   </div>
