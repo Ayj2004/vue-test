@@ -31,15 +31,12 @@
 
       <!-- 评论列表 -->
       <div class="comment-list" v-if="!isLoading">
+        <!-- 正确写法：注释单独写，key使用唯一时间戳 -->
         <div
           class="comment-item"
           v-for="(item, index) in commentList"
           :key="item.time"
-          <!--
-          改用唯一时间戳作为key，避免index导致的渲染问题
-          --
         >
-          >
           <div class="comment-content">{{ item.content }}</div>
           <div class="comment-time">{{ formatTime(item.time) }}</div>
           <!-- 新增删除按钮 -->
