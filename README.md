@@ -1,17 +1,128 @@
-【仓库根目录】
-├── src/
-│ ├── views/
-│ │ ├── Home.vue
-│ │ ├── Year22.vue
-│ │ ├── Month1.vue ~ Month10.vue
-│ │ └── LastPage.vue （已替换为带评论功能的版本）
-│ ├── router/index.ts
-│ ├── assets/style/global.css
-├── public/
-│ ├── yuan-dan.jpg
-│ ├── 1.jpg ~ 10.jpg
-│ └── xue-jie.jpg
-├── edge-functions/ （新建）
-│ └── comment-proxy.js （边缘函数入口文件）
-├── package-lock.json
-└── package.json
+# 个人回忆录 - 22 岁至 23 岁成长记录
+
+本项目是一个基于 Vue 3 + TypeScript 开发的个人回忆录网页应用，记录了从 22 岁到 23 岁期间每月的生活状态、情绪与关键经历，以月份为脉络呈现一段人生成长轨迹。
+
+## 🌟 项目声明
+
+本项目由阿里云 ESA 提供加速、计算和保护
+![阿里云ESA](https://github.com/Ayj2004/vue-test/blob/main/src/assets/aliyun.png)
+
+## 📋 项目介绍
+
+### 核心功能
+
+- 按月份（1 月-10 月）展示不同主题的生活回忆，每个月份页面包含专属主题词、文字记录、回忆图片
+- 22 岁年度总结页，梳理一整年的情绪与经历
+- 23 岁开篇寄语页，传递对新一岁的期许
+- 页面间路由跳转，支持月份切换、返回首页等操作
+- 响应式设计，适配不同设备的视觉展示
+
+### 页面结构
+
+| 页面路径               | 页面功能                    |
+| ---------------------- | --------------------------- |
+| `/`                    | 首页（23 岁开篇）           |
+| `/year22`              | 22 岁年度总结页             |
+| `/month1` - `/month10` | 1-10 月月度回忆页           |
+| `/last`                | 回忆录最后一页（23 岁期许） |
+
+## 🛠 技术栈
+
+- 前端框架：Vue 3 (Setup Script)
+- 编程语言：TypeScript
+- 路由管理：Vue Router
+- 样式方案：CSS 原生（全局样式 + 组件作用域样式）
+- 构建工具：Vite
+
+## 🚀 快速开始
+
+### 环境要求
+
+- Node.js ≥ 16.x
+- npm/yarn/pnpm 包管理器
+
+### 安装与运行
+
+1. 克隆项目
+
+```bash
+git clone <项目仓库地址>
+cd <项目目录>
+```
+
+2. 安装依赖
+
+```bash
+# npm
+npm install
+
+# yarn
+yarn install
+
+# pnpm
+pnpm install
+```
+
+3. 本地开发启动
+
+```bash
+# npm
+npm run dev
+
+# yarn
+yarn dev
+
+# pnpm
+pnpm dev
+```
+
+4. 构建生产版本
+
+```bash
+# npm
+npm run build
+
+# yarn
+yarn build
+
+# pnpm
+pnpm build
+```
+
+## 🎨 设计风格
+
+- 整体视觉：暖色调为主，搭配柔和的粉色、米色系，营造温馨的回忆氛围
+- 个性化样式：每个月份页面有专属的背景色、边框色，区分不同月份的情绪基调
+- 交互效果：按钮 hover 动效、阴影层次，提升页面体验
+
+## 📁 项目目录结构
+
+```
+src/
+├── assets/            # 静态资源
+│   └── style/         # 全局样式
+├── components/        # 通用组件
+├── router/            # 路由配置
+├── views/             # 页面视图
+│   ├── Home.vue       # 首页
+│   ├── Year22.vue     # 22岁总结页
+│   ├── Month1.vue - Month10.vue # 月度回忆页
+│   ├── LastPage.vue   # 最后一页
+├── App.vue            # 根组件
+├── main.ts            # 入口文件
+└── vite-env.d.ts      # Vite类型声明
+```
+
+## ✨ 特色亮点
+
+- 情感化设计：每个月份页面根据主题词匹配专属视觉风格，贴合情绪表达
+- 轻量化实现：无冗余依赖，纯原生 Vue + TS 开发，加载速度快
+- 易扩展：新增月份/页面仅需遵循现有模板，路由配置简单
+
+## 📄 许可证
+
+本项目为个人非商用项目，仅供学习和个人回忆展示使用，未经授权禁止二次分发或商用。
+
+## 📞 备注
+
+项目中所有文字、图片均为个人原创内容，仅用于记录个人生活，请勿盗用。
